@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
+import datetime
 import getpass
 import os
 import subprocess
 import sys
+import uuid
 from typing import List, Tuple
 
 
@@ -27,19 +29,36 @@ def run_apt_update() -> int:
     """Perform `apt update`, list upgradable packages and then run `apt upgrade`.
 
     The sudo password is requested once and reused for both update and upgrade.
+    All output is logged to a file; only errors are displayed to the user.
     """
-    if not _is_sudo_member():
-        print("Error: current user is not in the sudo group.", file=sys.stderr)
+    # Initialize execution context: UUID and log file
+    execution_uuid = str(uuid.uuid4())
+    timestamp = datetime.datetime.now().strftime("%s.%f")[:-3]  # millisecond precision
+    log_filename = f"{timestamp}-{execution_uuid}-os-update.log"
+    log_filepath = os.path.join("/tmp", log_filename)
+
+    try:
+        log_file = open(log_filepath, "w", buffering=1)
+    except Exception as e:
+        print(f"Error: could not create log file {log_filepath}: {e}", file=sys.stderr)
         return 1
 
+    if not _is_sudo_member():
+        print("Error: current user is not in the sudo group.", file=sys.stderr)
+        log_file.close()
+        return 1
+
+    print("Checking sudo credentials...")
     password = getpass.getpass("Sudo password: ")
     if not password:
         print("Error: password cannot be empty.", file=sys.stderr)
+        log_file.close()
         return 1
 
     # Run apt update (requires sudo). Use a helper that streams output and
     # writes the sudo password once to stdin. Set DEBIAN_FRONTEND to
     # noninteractive and pass Dpkg options during upgrade to avoid prompts.
+    print("Updating package repositories...")
     update_cmd = [
         "sudo",
         "-S",
@@ -55,7 +74,7 @@ def run_apt_update() -> int:
         "--fix-missing",
     ]
 
-    rc = _run_sudo_and_stream(password, update_cmd)
+    rc = _run_sudo_and_stream(password, update_cmd, log_file)
 
     # After running `apt update`, check which packages are upgradable.
     try:
@@ -66,14 +85,14 @@ def run_apt_update() -> int:
         upg = []
 
     if not upg:
-        print("No upgrades available.")
+        log_file.write("No upgrades available.\n")
     else:
-        print("Upgradable packages:")
+        log_file.write("Upgradable packages:\n")
         for pkg, ver in upg:
-            print(f"  {pkg}: {ver}")
+            log_file.write(f"  {pkg}: {ver}\n")
 
     # Proceed to run apt upgrade using the same sudo password.
-    print("\nStarting apt upgrade...")
+    print("Running system upgrade...")
     # Include Dpkg options to avoid interactive config prompts and run noninteractive.
     upgrade_cmd = [
         "sudo",
@@ -95,26 +114,24 @@ def run_apt_update() -> int:
         "--fix-broken",
     ]
 
-    rc_upgrade, upgrade_output = _run_sudo_and_stream(password, upgrade_cmd, capture_output=True)
+    rc_upgrade, upgrade_output = _run_sudo_and_stream(password, upgrade_cmd, log_file, capture_output=True)
 
     should_link_ffmpeg = rc_upgrade == 0 and _upgrade_installed_packages(upgrade_output)
     if should_link_ffmpeg:
-        print("\nUpgrade installed packages, linking Opera ffmpeg library...")
+        print("Configuring Opera ffmpeg library...")
         opera_link_cmd = [
             "sudo",
             "-S",
             "-p",
             "",
-            "env",
-            "DEBIAN_FRONTEND=noninteractive",
             "ln",
             "-vsf",
             "/snap/chromium/current/usr/lib/chromium-browser/libffmpeg.so",
             "/usr/lib/x86_64-linux-gnu/opera-stable/libffmpeg.so",
         ]
-        rc_link = _run_sudo_and_stream(password, opera_link_cmd)
+        rc_link, _ = _run_sudo_and_stream(password, opera_link_cmd, log_file)
         if rc_link != 0:
-            print("Warning: Opera ffmpeg link command failed.", file=sys.stderr)
+            log_file.write("Warning: Opera ffmpeg link command failed.\n")
 
     # Clear password variable as soon as possible
     password = None
@@ -124,14 +141,26 @@ def run_apt_update() -> int:
         pass
 
     if rc_upgrade != 0:
-        print("Error: apt upgrade failed.", file=sys.stderr)
+        print(f"Error: apt upgrade failed. See log: {log_filepath}", file=sys.stderr)
+        try:
+            with open(log_filepath, "r") as f:
+                print(f.read(), file=sys.stderr)
+        except Exception:
+            pass
+    else:
+        print("Update completed successfully.")
+
+    try:
+        log_file.close()
+    except Exception:
+        pass
 
     return rc_upgrade
 
 
-def _run_sudo_and_stream(password: str, argv: list, capture_output: bool = False) -> Tuple[int, str]:
-    """Run a sudo command (argv) sending the password once and streaming
-    stdout/stderr to the current stdout. Returns (returncode, output).
+def _run_sudo_and_stream(password: str, argv: list, log_file=None, capture_output: bool = False) -> Tuple[int, str]:
+    """Run a sudo command (argv) sending the password once and logging
+    stdout/stderr to log_file. Returns (returncode, output).
     """
     try:
         proc = subprocess.Popen(
@@ -158,7 +187,8 @@ def _run_sudo_and_stream(password: str, argv: list, capture_output: bool = False
     output_lines: List[str] = []
     try:
         for line in proc.stdout:
-            print(line, end="")
+            if log_file:
+                log_file.write(line)
             if capture_output:
                 output_lines.append(line)
     except Exception:
@@ -166,7 +196,8 @@ def _run_sudo_and_stream(password: str, argv: list, capture_output: bool = False
         try:
             out, _ = proc.communicate(timeout=10)
             if out:
-                print(out, end="")
+                if log_file:
+                    log_file.write(out)
                 if capture_output:
                     output_lines.append(out)
         except Exception:
