@@ -75,6 +75,19 @@ def run_apt_update() -> int:
     ]
 
     rc = _run_sudo_and_stream(password, update_cmd, log_file)
+    if rc != 0:
+        log_file.write("Error: apt update failed. The upgrade workflow was aborted.\n")
+        print(f"Error: apt update failed. See log: {log_filepath}", file=sys.stderr)
+        try:
+            with open(log_filepath, "r") as f:
+                print(f.read(), file=sys.stderr)
+        except Exception:
+            pass
+        try:
+            log_file.close()
+        except Exception:
+            pass
+        return rc
 
     # After running `apt update`, check which packages are upgradable.
     try:
@@ -87,9 +100,9 @@ def run_apt_update() -> int:
     if not upg:
         log_file.write("No upgrades available.\n")
     else:
-        log_file.write("Upgradable packages:\n")
-        for pkg, ver in upg:
-            log_file.write(f"  {pkg}: {ver}\n")
+        log_file.write("Packages scheduled for upgrade:\n")
+        for pkg in upg:
+            log_file.write(f"  - {pkg}\n")
 
     # Proceed to run apt upgrade using the same sudo password.
     print("Running system upgrade...")
@@ -104,6 +117,8 @@ def run_apt_update() -> int:
         "apt",
         "-o",
         "Apt::Cmd::Disable-Script-Warning=true",
+        "-o",
+        "APT::Get::Always-Include-Phased-Updates=true",
         "-o",
         "Dpkg::Options::=--force-confdef",
         "-o",
@@ -176,7 +191,6 @@ def _run_sudo_and_stream(password: str, argv: list, log_file=None, capture_outpu
         print("Error: 'sudo' command not found.", file=sys.stderr)
         return 1, ""
 
-    # Write password and close stdin to signal no further input.
     try:
         proc.stdin.write(f"{password}\n")
         proc.stdin.flush()
@@ -192,7 +206,6 @@ def _run_sudo_and_stream(password: str, argv: list, log_file=None, capture_outpu
             if capture_output:
                 output_lines.append(line)
     except Exception:
-        # Last-resort: read remaining output
         try:
             out, _ = proc.communicate(timeout=10)
             if out:
@@ -207,42 +220,40 @@ def _run_sudo_and_stream(password: str, argv: list, log_file=None, capture_outpu
     return proc.returncode, "".join(output_lines)
 
 
-def _get_upgradable_packages() -> List[Tuple[str, str]]:
-
-    """Run `apt list --upgradable` and return list of (package, new_version).
-
-    The function ignores the initial "Listing..." line and parses lines of the
-    form: "pkg/repo  version  arch [upgradable from: ...]".
-    """
+def _get_upgradable_packages() -> List[str]:
+    """Run `apt list --upgradable` and return a deduplicated list of package names."""
     try:
         res = subprocess.run(
-            ["apt", "list", "--upgradable"],
+            [
+                "apt",
+                "-o",
+                "APT::Get::Always-Include-Phased-Updates=true",
+                "list",
+                "--upgradable",
+            ],
             check=False,
             capture_output=True,
             text=True,
         )
     except FileNotFoundError:
-        # apt not available (unlikely on Ubuntu)
         return []
 
-    lines = res.stdout.splitlines()
-    packages: List[Tuple[str, str]] = []
-    for line in lines:
+    packages: List[str] = []
+    seen = set()
+    for line in res.stdout.splitlines():
         line = line.strip()
-        if not line:
-            continue
-        if line.lower().startswith("listing"):
+        if not line or line.lower().startswith("listing"):
             continue
 
         parts = line.split()
-        # expected format: package/repo  version  arch [upgradable from: ...]
         if len(parts) < 2:
             continue
 
         pkg_repo = parts[0]
-        new_version = parts[1]
         pkg_name = pkg_repo.split("/")[0]
-        packages.append((pkg_name, new_version))
+        if pkg_name and pkg_name not in seen:
+            seen.add(pkg_name)
+            packages.append(pkg_name)
 
     return packages
 
