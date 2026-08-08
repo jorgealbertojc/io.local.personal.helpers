@@ -74,7 +74,7 @@ def run_apt_update() -> int:
         "--fix-missing",
     ]
 
-    rc = _run_sudo_and_stream(password, update_cmd, log_file)
+    rc, _ = _run_sudo_and_stream(password, update_cmd, log_file)
     if rc != 0:
         log_file.write("Error: apt update failed. The upgrade workflow was aborted.\n")
         print(f"Error: apt update failed. See log: {log_filepath}", file=sys.stderr)
