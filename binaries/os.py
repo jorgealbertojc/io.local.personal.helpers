@@ -17,7 +17,8 @@ def main() -> None:
         return
 
     if len(sys.argv) > 1 and sys.argv[1] in {"update", "apt-update"}:
-        sys.exit(run_apt_update())
+        verbose = any(a in sys.argv for a in ("-v", "--verbose"))
+        sys.exit(run_apt_update(verbose=verbose))
 
 
 if __name__ == "__main__":

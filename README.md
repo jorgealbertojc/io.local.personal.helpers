@@ -17,6 +17,9 @@ The command currently supports:
 - `os` - prints a basic initialization message.
 - `os --help` or `os help` - shows usage information.
 - `os update` - runs the update and upgrade workflow for the system.
+- `os update -v` or `os update --verbose` - runs the same update workflow but also
+    prints full output from `apt` commands to the terminal while still writing
+    all output to the execution log.
 
 ## Requirements
 
@@ -67,17 +70,24 @@ This prints a small man-page style description of the command, usage, and suppor
 
 ```bash
 os update
+os update -v
 ```
 
 The current `update` workflow performs the following actions:
 
 1. Validates that the current user belongs to the `sudo` group.
-2. Prompts for the sudo password once.
+2. Prompts for the sudo password once and reuses it for the entire operation.
 3. Runs `apt update` with non-interactive flags.
-4. Lists packages that are available for upgrade.
-5. Executes `apt upgrade` using the same sudo session context.
-6. If the upgrade installed packages and the Opera ffmpeg library needs to be repaired, the command links the Opera ffmpeg library to the Chromium Snap-provided library.
-7. Writes all command output to a temporary log file in `/tmp` with a UUID and timestamp in the filename.
+4. Lists packages that are available for upgrade (package names only).
+5. Executes `apt upgrade` using the same sudo session context. By default the
+    command writes the detailed command output to the execution log and prints
+    minimal informational messages to the terminal. Use `-v|--verbose` to mirror
+    full command output to the terminal as well as the log file.
+6. If the upgrade installed packages and the Opera ffmpeg library needs to be
+    repaired, the command creates or updates a symlink for Opera's `libffmpeg.so`
+    pointing to the Chromium snap-provided library.
+7. Writes all command output to a temporary log file in `/tmp` with a UUID and
+    timestamp in the filename.
 
 ## Log behavior
 
@@ -93,8 +103,10 @@ If an error occurs, the user is informed and the log path is reported so the exe
 
 ## Repository layout
 
-- `binaries/` — executable Python command modules.
-- `shell/ubuntu/` — older Ubuntu shell helpers retained for reference, but the primary command is now the Python `os` entrypoint.
+- `binaries/` — executable Python command modules (current entrypoint is `os`).
+
+Note: legacy shell helpers are not included in this repository; the Python `os` command
+replaces the older shell-only updater workflow.
 
 ## Notes
 

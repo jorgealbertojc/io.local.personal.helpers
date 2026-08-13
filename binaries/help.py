@@ -20,6 +20,8 @@ def show_help() -> None:
     print("  update     Run 'sudo apt -y update --fix-missing' followed by")
     print("             listing upgradable packages and 'sudo apt -y upgrade' if")
     print("             the user is in the sudo group.")
+    print("  -v, --verbose  Print full command output to the terminal while still")
+    print("                 writing the same output to the execution log.")
     print("")
     print("Notes:")
     print("  This tool is under development and will be extended with more")

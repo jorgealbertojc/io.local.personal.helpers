@@ -25,7 +25,7 @@ def _is_sudo_member() -> bool:
     return os.getuid() == 0 or "sudo" in groups
 
 
-def run_apt_update() -> int:
+def run_apt_update(verbose: bool = False) -> int:
     """Perform `apt update`, list upgradable packages and then run `apt upgrade`.
 
     The sudo password is requested once and reused for both update and upgrade.
@@ -74,7 +74,7 @@ def run_apt_update() -> int:
         "--fix-missing",
     ]
 
-    rc, _ = _run_sudo_and_stream(password, update_cmd, log_file)
+    rc, _ = _run_sudo_and_stream(password, update_cmd, log_file, verbose=verbose)
     if rc != 0:
         log_file.write("Error: apt update failed. The upgrade workflow was aborted.\n")
         print(f"Error: apt update failed. See log: {log_filepath}", file=sys.stderr)
@@ -129,7 +129,7 @@ def run_apt_update() -> int:
         "--fix-broken",
     ]
 
-    rc_upgrade, upgrade_output = _run_sudo_and_stream(password, upgrade_cmd, log_file, capture_output=True)
+    rc_upgrade, upgrade_output = _run_sudo_and_stream(password, upgrade_cmd, log_file, capture_output=True, verbose=verbose)
 
     should_link_ffmpeg = rc_upgrade == 0 and _upgrade_installed_packages(upgrade_output)
     if should_link_ffmpeg:
@@ -144,7 +144,7 @@ def run_apt_update() -> int:
             "/snap/chromium/current/usr/lib/chromium-browser/libffmpeg.so",
             "/usr/lib/x86_64-linux-gnu/opera-stable/libffmpeg.so",
         ]
-        rc_link, _ = _run_sudo_and_stream(password, opera_link_cmd, log_file)
+        rc_link, _ = _run_sudo_and_stream(password, opera_link_cmd, log_file, verbose=verbose)
         if rc_link != 0:
             log_file.write("Warning: Opera ffmpeg link command failed.\n")
 
@@ -173,9 +173,10 @@ def run_apt_update() -> int:
     return rc_upgrade
 
 
-def _run_sudo_and_stream(password: str, argv: list, log_file=None, capture_output: bool = False) -> Tuple[int, str]:
+def _run_sudo_and_stream(password: str, argv: list, log_file=None, capture_output: bool = False, verbose: bool = False) -> Tuple[int, str]:
     """Run a sudo command (argv) sending the password once and logging
-    stdout/stderr to log_file. Returns (returncode, output).
+    stdout/stderr to log_file. When `verbose` is True, also print output
+    to the terminal. Returns (returncode, output).
     """
     try:
         proc = subprocess.Popen(
@@ -201,8 +202,18 @@ def _run_sudo_and_stream(password: str, argv: list, log_file=None, capture_outpu
     output_lines: List[str] = []
     try:
         for line in proc.stdout:
+            # write to log file always when provided
             if log_file:
-                log_file.write(line)
+                try:
+                    log_file.write(line)
+                except Exception:
+                    pass
+            # mirror to terminal only when verbose
+            if verbose:
+                try:
+                    print(line, end="")
+                except Exception:
+                    pass
             if capture_output:
                 output_lines.append(line)
     except Exception:
