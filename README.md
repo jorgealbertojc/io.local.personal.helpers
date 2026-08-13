@@ -4,13 +4,13 @@ This repository contains personal system helper utilities for Ubuntu environment
 
 ## Overview
 
-The command is located in the `binaries/` directory and is exposed through a symlink so it can be invoked directly from the shell as `os`.
+The command is located in the `cmd/os/` directory and is exposed through a symlink so it can be invoked directly from the shell as `os`.
 
 ### Current command modules
 
-- `binaries/os.py`: executable command entrypoint.
-- `binaries/help.py`: help and usage text for the command.
-- `binaries/apt.py`: implementation of the update workflow for Ubuntu package management.
+- `cmd/os/os.py`: executable command entrypoint.
+- `cmd/os/help.py`: help and usage text for the command.
+- `cmd/os/apt.py`: implementation of the update workflow for Ubuntu package management.
 
 The command currently supports:
 
@@ -39,7 +39,7 @@ Example:
 
 ```bash
 ln -svf \
-    ${HOME}/Development/gitlab.com/jorgealbertojc/io.local.personal.helpers/binaries/os.py \
+    ${HOME}/Development/gitlab.com/jorgealbertojc/io.local.personal.helpers/cmd/os/os.py \
     ${HOME}/.local/bin/os
 ```
 
@@ -103,7 +103,8 @@ If an error occurs, the user is informed and the log path is reported so the exe
 
 ## Repository layout
 
-- `binaries/` — executable Python command modules (current entrypoint is `os`).
+- `cmd/` — command helpers.
+- `cmd/os` - executable command for os isntructions.
 
 Note: legacy shell helpers are not included in this repository; the Python `os` command
 replaces the older shell-only updater workflow.
