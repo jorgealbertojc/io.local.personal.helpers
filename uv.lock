@@ -4,5 +4,4 @@ requires-python = ">=3.12"
 
 [[package]]
 name = "io-local-personal-helpers"
-version = "0.0.1"
 source = { editable = "." }

@@ -1,6 +1,6 @@
 [project]
 name = "io-local-personal-helpers"
-version = "0.0.1"
+dynamic = ["version"]
 description = "A wrapper CLI for system administration commands on Ubuntu."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -12,6 +12,9 @@ os = "oswrap.cli:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/oswrap/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/oswrap"]
