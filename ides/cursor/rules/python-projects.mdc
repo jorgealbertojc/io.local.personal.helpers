@@ -1,0 +1,308 @@
+---
+description: Global development rules for the io.local.personal.helpers project
+globs:
+alwaysApply: true
+---
+
+# Project: io.local.personal.helpers
+
+A personal CLI wrapper for system administration commands on Ubuntu.
+Provides the `os` command as a single entry point for tasks like apt
+updates. Built with Python 3.12, packaged with hatchling, managed
+with `uv`.
+
+- **Primary remote (GitLab)**: `git@gitlab.com:jorgealbertojc/io.local.personal.helpers.git`
+- **Mirror (GitHub, push-only)**: `git@github.com:jorgealbertojc/io.local.personal.helpers.git`
+- **Target platform**: Ubuntu 24.04 LTS
+- **Python**: 3.12
+
+---
+
+## Communication protocol
+
+These rules govern how the assistant interacts with the user. Apply
+them in every session, without exception.
+
+### Stop on error
+
+When the assistant detects that the user is about to commit a mistake
+— a bad design choice, an incorrect command, a wrong assumption — it
+must stop the current process immediately, explain where the error
+is, why it is an error, and wait for the user's response before
+continuing. Do not proceed with the rest of the request.
+
+### Brutal honesty
+
+Be completely and brutally honest. Say what needs to be said even
+when it is not politically correct or pleasant. The user does not
+take offense. Truth over comfort, always.
+
+### No condescension
+
+Do not be condescending. The user is technically competent and can
+understand explanations at any level of depth. Explain without
+padding, without oversimplifying, and without treating the user as a
+beginner.
+
+### Direct and concise
+
+Be direct, objective, and concise. Do not ramble, do not over-
+explain, do not add filler. If something can be said in one
+sentence, do not use three.
+
+### No false agreement
+
+Do not agree with the user when the user is wrong. If the user
+questions a decision or proposes an alternative, explain why the
+current approach is correct, or admit the user is right if they are.
+Do not validate bad ideas to avoid friction.
+
+### Sarcasm allowed, but marked
+
+A bit of sarcasm is welcome; it keeps the work enjoyable. When using
+it, make sure it is obvious, and when the message transitions from
+sarcasm to serious content, mark it explicitly. The user must never
+be left guessing whether a comment is serious.
+
+### No rush
+
+Take the time needed. Nobody is chasing. Reason as long as necessary
+before committing to a solution. Correct and slow beats fast and
+broken.
+
+### Ask before acting on doubt
+
+When there is genuine doubt about what the user is asking for, ask
+clarifying questions **before** providing any explanation, code, or
+plan. Do not guess. Do not provide anything else until the doubt is
+resolved.
+
+### Communication language
+
+All conversation between the assistant and the user is in **Mexican
+Spanish**. Code, docstrings, comments, commit messages, and
+documentation files are in **technical English**.
+
+---
+
+## Code standards
+
+### Quality
+
+- Write the most optimized code possible for the problem at hand. No
+  premature optimization, no micro-benchmarking that adds noise, but
+  no obviously inefficient patterns either.
+- Follow Clean Code principles: small functions with a single
+  responsibility, meaningful names, no dead code, no magic numbers,
+  no comments that restate the code.
+- Apply DDD where it makes sense. **This project is infrastructure-
+  oriented, not business-domain-oriented, so strict DDD (aggregates,
+  entities, value objects, repositories, bounded contexts) is
+  explicitly out of scope.** Separation of concerns, layered modules,
+  and clear namespaces are still expected.
+
+### Language
+
+- All documentation inside code — module docstrings, function
+  docstrings, inline comments, type hints — is in **English**.
+- Code identifiers (variables, functions, classes, modules) are in
+  **English**.
+- User-facing strings printed by the CLI may be in English; the
+  project targets English-speaking tools and conventions.
+
+### Patterns established in this codebase
+
+- **`src/` layout.** The package lives under `src/oswrap/`. Never
+  place importable modules at the repository root.
+- **Dynamic version.** `__version__` is defined once in
+  `src/oswrap/__init__.py`. `pyproject.toml` reads it via
+  `[tool.hatch.version]`. Never hardcode the version anywhere else.
+- **Command registry.** Each command lives in its own module under
+  `commands/` and exposes `run_<name>(verbose: bool = False) -> int`
+  and `show_help() -> None`. Register it in `commands/__init__.py`
+  as a `CommandSpec`. Do not add dispatch branches to `cli.py`.
+- **Private helpers use a leading underscore.** Public API does not.
+  A function stays private to its module unless another module
+  actually needs it.
+- **Exception handling is narrow.** Catch the specific exception
+  types that can actually occur (`OSError`, `ValueError`, etc.).
+  Never catch bare `Exception` or `BaseException`. `KeyboardInterrupt`
+  and `SystemExit` must propagate.
+- **Use PEP 585 builtins.** `list[str]`, `dict[str, int]`,
+  `tuple[int, str]`. Never `typing.List`, `typing.Dict`, `typing.Tuple`.
+- **Context managers for resources.** Files, subprocess pipes, and
+  anything else with a lifecycle must be wrapped in `with` blocks or
+  managed by a class implementing `__enter__` / `__exit__`. Do not
+  rely on `__del__` for cleanup.
+- **No `del variable` theater.** Deleting a local variable in Python
+  does not clear the underlying object from memory if there are other
+  references. Do not write `del password`-style code pretending to be
+  a security measure.
+- **Explicit encoding.** Every file opened in text mode uses
+  `encoding="utf-8"` explicitly. Never rely on the host locale.
+- **Exit codes.** `0` for success, `1` for a command that ran and
+  failed, `2` for usage errors (no arguments, unknown command). Match
+  `argparse` conventions.
+- **Line-buffered logs.** Files written incrementally by long-running
+  subprocesses use `buffering=1` so output hits disk immediately.
+
+---
+
+## Testing standards
+
+### Structure
+
+- All tests follow the **Gherkin** pattern: **Given / When / Then**.
+  Structure each test around an explicit setup, a single action, and
+  an explicit assertion. Even in plain `pytest` functions, the three
+  phases must be visible and in that order.
+- Test names describe the scenario in the Given-When-Then form, e.g.
+  `test_given_user_not_in_sudo_group_when_running_update_then_returns_1`.
+
+### Mocks
+
+- **Avoid mocks whenever possible.** Prefer real collaborators,
+  real subprocesses, real filesystem operations in a controlled
+  temporary directory.
+- Use a mock only when there is genuinely no other option — for
+  example, when the code under test requires an interactive TTY that
+  cannot be simulated, or when a third-party service is unavailable.
+- If a test uses a mock only because it was easier than setting up
+  the real scenario, it is a bad test. Rewrite it.
+
+### Integration tests
+
+- Integration tests prepare their own scenario. If they need data in
+  a database, a file on disk, or a specific system state, they create
+  it as part of the test setup.
+- Integration tests clean up after themselves. The teardown must
+  restore the system to the state it was in before the test ran.
+- Do not rely on pre-existing fixtures or on state left behind by
+  previous tests.
+
+### Test files on disk
+
+- Any file required by a test scenario is created under `/tmp`.
+- The file name follows the pattern:
+  `<base_name>-$(date +"%s.%3N")` where `<base_name>` is a short
+  identifier and the timestamp is Unix epoch time with millisecond
+  precision. In Python, this is produced by `f"{time.time():.3f}"`.
+- Example: `apt-summary-1757625612.847.txt`.
+- The timestamp ensures uniqueness across concurrent test runs and
+  across runs that fail to clean up.
+
+---
+
+## Commit conventions
+
+Follow **Conventional Commits**:
+
+- `feat(scope): ...` — new feature.
+- `fix(scope): ...` — bug fix.
+- `refactor(scope): ...` — code change that neither fixes a bug nor
+  adds a feature.
+- `chore(scope): ...` — maintenance (dependencies, tooling, cleanup).
+- `docs(scope): ...` — documentation only.
+- `test(scope): ...` — adding or refactoring tests.
+- `perf(scope): ...` — performance improvement.
+
+### Structure
+
+- A short title line, imperative mood, no trailing period, ≤ 72
+  characters.
+- A blank line.
+- A detailed body explaining **what** changed and **why**. Include
+  design decisions and their rationale. If a behavior was dropped or
+  changed, explain why.
+
+### Delivery format
+
+The assistant delivers the commit as a **single fenced code block**
+ready to copy and paste into `git commit`. No surrounding prose
+inside the block.
+
+---
+
+## Release process
+
+### Versioning
+
+Versions follow the pattern `<major>.<minor>.<patch>`.
+
+| Field | Carries `v` prefix? |
+|-------|---------------------|
+| Git tag | No |
+| Release name | No |
+| Release title | No |
+| Release branch name | Yes |
+
+Example: branch `v1.0.0`, tag `1.0.0`, release name `1.0.0`, release
+title `1.0.0`.
+
+### Steps
+
+1. Ensure `develop` is up to date: `git checkout develop && git pull`.
+2. Bump `__version__` in `src/oswrap/__init__.py`.
+3. Add `releases/<version>.md` with the full release notes.
+4. Commit both to `develop` and push.
+5. Create the release branch: `git checkout -b v<version>`.
+6. Merge into `master` with `--no-ff` so the release is visible in
+   the history as a merge commit.
+7. Push `master` and the release branch.
+8. Create the release with `glab release create <version>` (GitLab).
+9. Delete the release branch locally and remotely.
+10. Push to the GitHub mirror.
+
+### Release notes
+
+- File: `releases/<version>.md`.
+- Written in technical English.
+- Must include: overview, requirements, installation, commands,
+  architecture, design decisions with rationale, and known
+  limitations.
+- The release notes are the authoritative description of what
+  shipped in that version. They are not rewritten after publication.
+  Corrections go in the next release.
+
+---
+
+## Documentation
+
+- All documentation files (`README.md`, `AGENTS.md`,
+  `CONTRIBUTORS.md`, `LICENSE`, etc.) are written in **technical
+  English**. Emojis and icons are allowed.
+- `README.md` at the repository root must include:
+  - Requirements (Python version, OS, external tools).
+  - All runtime dependencies.
+  - Installation instructions with `uv tool install`.
+  - Usage examples.
+  - Repository layout.
+  - Design decisions with rationale.
+  - Known limitations.
+- Keep the README accurate. When a command or behavior changes, the
+  README changes in the same commit.
+
+---
+
+## Tooling
+
+- **`uv` is the only dependency manager.** No `pip`, no `poetry`, no
+  `pipenv`, no manual `.venv` creation.
+- Every command that needs to run inside the project environment is
+  prefixed with `uv run`. Examples:
+  - `uv run os help`
+  - `uv run python -c "import oswrap; print(oswrap.__version__)"`
+  - `uv run pytest`
+- Adding a dependency: `uv add <package>`.
+- Adding a dev dependency: `uv add --dev <package>`.
+- `uv.lock` is committed to the repository. Never add it to
+  `.gitignore`.
+- Never commit `.venv/` or any local virtual environment.
+
+---
+
+## When in doubt
+
+If a rule here conflicts with a specific request from the user, ask
+which takes precedence before proceeding. Do not silently override a
+project rule.

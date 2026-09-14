@@ -4,7 +4,9 @@ dynamic = ["version"]
 description = "A wrapper CLI for system administration commands on Ubuntu."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "argcomplete>=3.7.2",
+]
 
 [project.scripts]
 os = "oswrap.cli:main"
