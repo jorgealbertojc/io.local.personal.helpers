@@ -1,4 +1,4 @@
-# oswrap1
+# oswrap
 
 > A personal CLI wrapper for system administration commands on Ubuntu.
 
@@ -9,7 +9,8 @@ privileged operations, execution logging, and interactive prompts.
 
 The project is designed to grow: adding a new wrapped command means
 adding a module under `commands/` and registering it. Everything else
-— dispatch, help, logging, sudo handling — is already in place.
+— dispatch, help, logging, sudo handling, shell completion — is
+already in place.
 
 ---
 
@@ -18,31 +19,67 @@ adding a module under `commands/` and registering it. Everything else
 - **Ubuntu 24.04 LTS** (or any Debian-based distribution with `apt`).
 - **Python 3.12** or newer.
 - **`uv`** as the dependency manager and tool runner.
+- **`curl`** and **`git`** for the one-line installer.
 - The current user must be **`root`** or a member of the **`sudo`**
   group to run privileged commands.
+
+The one-line installer handles Python, `uv`, and the tool itself. You
+only need `curl` and `git` available before running it.
 
 ---
 
 ## 🚀 Installation
 
-`oswrap` is not published on PyPI. It is installed directly from its
-Git repository using `uv tool install`, which creates an isolated
-environment for the tool and exposes the `os` executable in
-`~/.local/bin` (or the directory reported by `uv tool dir --bin`).
-
-### From a release tag (recommended)
+### One-line installer (recommended)
 
 ```bash
-uv tool install git+ssh://git@gitlab.com/jorgealbertojc/io.local.personal.helpers.git@1.0.0
+curl -fsSL https://gitlab.com/jorgealbertojc/io.local.personal.helpers/-/raw/master/install.sh | sh
 ```
 
-### From the default branch (development)
+The installer:
+
+1. Verifies that `curl` and `git` are available.
+2. Installs `uv` from the official installer if it is not on `PATH`.
+3. Installs the package as a `uv` tool, pinned to release `1.0.1`.
+4. Activates `argcomplete`'s global shell completion.
+5. Prints the location of the `os` command and how to verify it.
+
+The script is POSIX `sh` compatible so it can be safely piped into a
+shell. It is idempotent: re-running it upgrades or reinstalls the tool
+without manual cleanup.
+
+#### Installer environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OSWRAP_VERSION` | `1.0.1` | Git tag to install. |
+| `OSWRAP_REPO` | GitLab SSH URL | Repository to install from. Override to install from the GitHub mirror, a fork, or a local path. |
+
+Example installing from the GitHub mirror:
+
+```bash
+OSWRAP_REPO="git+https://github.com/jorgealbertojc/io.local.personal.helpers.git" \
+  curl -fsSL https://raw.githubusercontent.com/jorgealbertojc/io.local.personal.helpers/master/install.sh | sh
+```
+
+### Manual installation with `uv tool install`
+
+For users who prefer to see and control each step. `oswrap` is not
+published on PyPI; it is installed directly from its Git repository.
+
+#### From a release tag
+
+```bash
+uv tool install git+ssh://git@gitlab.com/jorgealbertojc/io.local.personal.helpers.git@1.0.1
+```
+
+#### From the default branch (development)
 
 ```bash
 uv tool install git+ssh://git@gitlab.com/jorgealbertojc/io.local.personal.helpers.git
 ```
 
-### From a local clone
+#### From a local clone
 
 ```bash
 git clone git@gitlab.com:jorgealbertojc/io.local.personal.helpers.git
@@ -57,10 +94,41 @@ which os
 os help
 ```
 
+### Enable shell completion
+
+If you installed through `install.sh`, completion is already active.
+If you installed manually with `uv tool install`, activate the global
+`argcomplete` hook once per machine:
+
+```bash
+uvx --from argcomplete activate-global-python-argcomplete --user
+```
+
+Then restart your shell:
+
+```bash
+exec $SHELL
+```
+
+After that, any command whose entry point carries the
+`# PYTHON_ARGCOMPLETE_OK` marker is completed automatically, including
+`os`. Verify with:
+
+```bash
+os <TAB>          # shows: update  apt-update  help
+os update <TAB>   # shows: -v  --verbose  --help  -h
+```
+
 ### Upgrade
 
 ```bash
 uv tool install --force git+ssh://git@gitlab.com/jorgealbertojc/io.local.personal.helpers.git@<version>
+```
+
+Or re-run the one-line installer with a different `OSWRAP_VERSION`:
+
+```bash
+OSWRAP_VERSION=1.1.0 curl -fsSL https://gitlab.com/jorgealbertojc/io.local.personal.helpers/-/raw/master/install.sh | sh
 ```
 
 ### Uninstall
@@ -70,7 +138,8 @@ uv tool uninstall io-local-personal-helpers
 ```
 
 This removes the executable and the isolated environment. It does not
-touch any repository clone you may have.
+touch any repository clone you may have, and it does not remove the
+`argcomplete` hook from your shell configuration.
 
 ---
 
@@ -101,6 +170,12 @@ os <command> help      # same as above
 | `0` | Success, or help was requested explicitly. |
 | `1` | The command ran but failed. |
 | `2` | Usage error: no arguments provided, or unknown command. |
+
+### Shell completion
+
+Tab completion is available for commands, aliases, and flags once
+`argcomplete`'s global hook is active (see Installation). No per-
+command registration is required.
 
 ---
 
@@ -172,6 +247,7 @@ problem without leaving the terminal.
 
 ```
 io.local.personal.helpers/
+├── install.sh                   # one-line installer (POSIX sh)
 ├── pyproject.toml
 ├── uv.lock
 ├── README.md
@@ -193,8 +269,9 @@ io.local.personal.helpers/
 
 ### Responsibilities
 
-| Module | Responsibility |
-|--------|----------------|
+| Path | Responsibility |
+|------|----------------|
+| `install.sh` | Bootstrap the toolchain on a fresh machine: install `uv` if needed, install the package as a `uv` tool, activate shell completion. |
 | `cli.py` | Parse `sys.argv`, dispatch to the command registry, invalidate sudo timestamp in a `finally` block. Nothing else. |
 | `helptext.py` | Render the general help message. Receives the command summaries as an argument; has no compile-time dependency on `commands/`. |
 | `commands/__init__.py` | Aggregates command modules into a registry. Exposes `resolve(name)` for dispatch by canonical name or alias, and `summaries()` for the general help. |
@@ -286,6 +363,19 @@ io.local.personal.helpers/
   ran but failed, `2` for usage errors (no arguments, unknown command).
   Matches `argparse` and the majority of serious CLIs.
 
+- **Shell completion via `argcomplete`.** A dedicated argparse parser
+  in `cli.py` is used exclusively for completion; it never participates
+  in argument dispatch. Keeping it separate avoids forcing a full
+  argparse migration before the CLI has enough commands to justify
+  one. Global activation via `activate-global-python-argcomplete` means
+  per-command registration is not required; the entry point only needs
+  the `# PYTHON_ARGCOMPLETE_OK` marker on its first line.
+
+- **One-line installer written in POSIX `sh`.** When the script is
+  piped into a shell, the shebang is ignored and the interpreter used
+  is `dash` on Ubuntu. Bash-only constructs would fail silently in
+  that path, so the script sticks to POSIX syntax on purpose.
+
 ---
 
 ## 🛠️ Development
@@ -367,6 +457,9 @@ release branch does.
   introduced alongside the second command.
 - Ubuntu version is not validated at runtime; the help text mentions
   24.04 LTS purely as documentation.
+- The install script does not verify a checksum or signature of the
+  downloaded repository content. This will be addressed once release
+  artifacts are hashed in the release notes.
 
 ---
 

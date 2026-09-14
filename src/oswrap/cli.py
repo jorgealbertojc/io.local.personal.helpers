@@ -1,3 +1,4 @@
+# PYTHON_ARGCOMPLETE_OK
 """Entry point for the os command.
 
 Dispatches the user-supplied arguments to the appropriate command
@@ -5,10 +6,12 @@ module through the registry exposed by oswrap.commands. This module
 owns argument parsing only; the actual work lives in the command
 modules.
 """
-
 import sys
+from argparse import ArgumentParser
 
-from oswrap.commands import resolve, summaries
+import argcomplete
+
+from oswrap.commands import COMMANDS, resolve, summaries
 from oswrap.helptext import show_general_help
 from oswrap.lib.sudo import invalidate_sudo_timestamp
 
@@ -18,6 +21,28 @@ _EXIT_USAGE = 2
 
 _HELP_FLAGS = frozenset({"help", "--help", "-h"})
 _VERBOSE_FLAGS = frozenset({"-v", "--verbose"})
+
+
+def _build_completion_parser() -> ArgumentParser:
+    """Build an argparse parser used exclusively for shell completion.
+
+    This parser is never used for actual argument dispatch. It exists
+    solely so that argcomplete can enumerate the available commands,
+    aliases, and global flags when the user presses TAB. Keeping it
+    separate from the manual dispatch logic in main() avoids forcing
+    a full argparse migration before the CLI has enough commands to
+    justify one.
+    """
+    parser = ArgumentParser(prog="os", add_help=False)
+    subparsers = parser.add_subparsers(dest="command")
+
+    for spec in COMMANDS.values():
+        for name in (spec.name, *spec.aliases):
+            sub = subparsers.add_parser(name, add_help=False)
+            sub.add_argument("-v", "--verbose", action="store_true")
+            sub.add_argument("--help", "-h", action="store_true")
+
+    return parser
 
 
 def main() -> int:
@@ -31,6 +56,8 @@ def main() -> int:
         2: Usage error: no arguments were provided, or the requested
             command is not registered.
     """
+    argcomplete.autocomplete(_build_completion_parser())
+
     args = sys.argv[1:]
 
     if not args:
